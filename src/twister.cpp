@@ -1898,7 +1898,9 @@ Value getposts(const Array& params, bool fHelp)
                     entry vEntry;
                     vEntry = v;
                     hexcapePost(vEntry);
-                    postsByTime.insert( pair<int64,entry>(time, vEntry) );
+                    if ((GetTime() + 2 * 60 * 60) >= time) {
+                        postsByTime.insert( pair<int64,entry>(time, vEntry) );
+                    }
                 }
             }
         }
