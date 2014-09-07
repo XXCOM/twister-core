@@ -393,7 +393,9 @@ void ThreadWaitExtIP()
         for (i = m_users.begin(); i != m_users.end(); ++i) {
             UserData const &data = i->second;
             BOOST_FOREACH(string username, data.m_following) {
-                torrentsToStart.insert(username);
+                if ( !data.m_blacklist.count(username)) {
+                   torrentsToStart.insert(username);
+                }
             }
         }
 
@@ -1957,6 +1959,7 @@ Value getdirectmsgs(const Array& params, bool fHelp)
 
         LOCK(cs_twister);
         if( remoteUsername.size() && m_users.count(strUsername) &&
+            !m_users[strUsername].m_blacklist.count(remoteUsername) &&
             m_users[strUsername].m_directmsg.count(remoteUsername) ){
             std::vector<StoredDirectMsg> &dmsFromToUser = m_users[strUsername].m_directmsg[remoteUsername];
             max_id = std::min( max_id, (int)dmsFromToUser.size()-1);
@@ -2078,6 +2081,71 @@ Value getfollowing(const Array& params, bool fHelp)
     LOCK(cs_twister);
     if( m_users.count(localUser) ) {
         BOOST_FOREACH(string username, m_users[localUser].m_following) {
+            ret.push_back(username);
+        }
+    }
+    return ret;
+}
+
+Value addtoblacklist(const Array& params, bool fHelp)
+{
+    if (fHelp || (params.size() != 2))
+        throw runtime_error(
+            "ignore <username> [ignore_username1,ignore_username2,...]\n"
+            "start ignoring users");
+
+    string localUser = params[0].get_str();
+    Array users      = params[1].get_array();
+
+    for( unsigned int u = 0; u < users.size(); u++ ) {
+        string username = users[u].get_str();
+        torrent_handle h = startTorrentUser(username, true);
+
+        if( h.is_valid() ) {
+            LOCK(cs_twister);
+            m_users[localUser].m_blacklist.insert(username);
+        }
+    }
+
+    return Value();
+}
+
+Value removefromblacklist(const Array& params, bool fHelp)
+{
+    if (fHelp || (params.size() != 2))
+        throw runtime_error(
+            "unignore <username> [unignore_username1,unignore_username2,...]\n"
+            "stop ignoring users");
+
+    string localUser = params[0].get_str();
+    Array users      = params[1].get_array();
+
+    LOCK(cs_twister);
+    for( unsigned int u = 0; u < users.size(); u++ ) {
+        string username = users[u].get_str();
+
+        if( m_users.count(localUser) &&
+            m_users[localUser].m_blacklist.count(username) ) {
+            m_users[localUser].m_blacklist.erase(username);
+        }
+    }
+
+    return Value();
+}
+
+Value getblacklist(const Array& params, bool fHelp)
+{
+    if (fHelp || (params.size() != 1))
+        throw runtime_error(
+            "getblacklist <username>\n"
+            "get list of users we ignored");
+
+    string localUser = params[0].get_str();
+
+    Array ret;
+    LOCK(cs_twister);
+    if( m_users.count(localUser) ) {
+        BOOST_FOREACH(string username, m_users[localUser].m_blacklist) {
             ret.push_back(username);
         }
     }
